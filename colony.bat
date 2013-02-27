@@ -1,4 +1,4 @@
 @echo off
-cd C:\xampp\htdocs\nodejs\lab\Colony3
+cd C:\xampp\htdocs\nodejs\dev\fleet2
 node main.js
 pause

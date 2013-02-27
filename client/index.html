@@ -1,0 +1,46 @@
+<!DOCTYPE HTML>
+<html lang="en-US">
+<head>
+	<title>Fleet Protocol Test</title>
+	<meta charset="UTF-8">
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+	<script type="text/javascript" src="json2.js"></script>
+	<script type="text/javascript" src="fleet.js"></script>
+</head>
+<body>
+	<button data-action="connect">Connect</button>
+	<button data-action="protocol">Protocol</button>
+	<input type="text" name="" id="msg" /><button data-action="send">Send</button>
+	<hr />
+	<div class="log">
+		
+	</div>
+	<script type="text/javascript">
+		
+		var ws;
+		var fp;
+		
+		$(function() {
+			$("[data-action]").click(function() {
+				switch ($(this).data("action")) {
+					case "connect":
+						ws = new fleet.ws("ws://localhost:8050");
+						console.log("ws",ws);
+					break;
+					case "send":
+						console.log("ws",ws);
+						ws.send($("#msg").val());
+					break;
+					case "protocol":
+						fp = new fleet.protocol("ws://localhost:8050");
+						fp.authtoken = "xyz123";
+						fp.connect();
+						console.log("ws",ws);
+					break;
+				}
+			});
+			
+		});
+	</script>
+</body>
+</html>

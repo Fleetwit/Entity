@@ -1,10 +1,11 @@
 {
-	"name": 		"Entity",
-	"description": 	"Entity Server Scaling",
-	"version":		"0.0.3",
+	"name": 		"Fleet",
+	"description": 	"Fleet Websocket server",
+	"version":		"0.0.1",
 	"dependencies": {
-		"ws": 				"latest",
-		"underscore":		"latest"
+		"ws": 			"latest",
+		"mysql":		"latest",
+		"underscore":	"latest"
 	}
 }
 

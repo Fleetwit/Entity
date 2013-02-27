@@ -28,6 +28,8 @@ function colony(options) {
 	this.range 		= [8080,8090];
 	this.shared		= {};
 	this.alpha		= false;
+	this.ocount 	= 0;	// online count. Value sent from outside the class.
+	this.max		= 2000;
 	this.log("Online on "+this.host);
 }
 colony.prototype.log = function(){
@@ -60,7 +62,8 @@ colony.prototype.info = function(){
 		console.log(blue,arguments[i],reset);
 	}
 };
-colony.prototype.connect = function(){
+colony.prototype.connect = function(callback){
+	this.connect_callback = callback;
 	// Find the colony
 	this.map();
 };
@@ -173,7 +176,7 @@ colony.prototype.setupServer = function(port){
 	var scope 		= this;
 	this.server 	= new simpleserver(this.port, {
 		onConnect:	function(client) {
-			scope.log("Client ID:", client.uid);
+			scope.log("INCOMING CONNECTION:", client.uid);
 		},
 		onReceive:	function(client, data) {
 			scope.log("Message from #"+client.uid+":", data);
@@ -291,7 +294,7 @@ colony.prototype.setupClient = function(host, port){
 			}
 		},
 		onReceive:	function(instance, message) {
-			//scope.log("Receiving", "type("+typeof message+")",message);
+			//scope.log("!!!!!!!!!!!Receiving", message);
 			// uid
 			if (message.uid) {
 				scope.client_uid = message.uid;
@@ -313,6 +316,11 @@ colony.prototype.setupClient = function(host, port){
 					port:	scope.port,
 					uuid:	scope.host+":"+scope.port
 				});
+				
+				// if there is a connect callback
+				if (scope.connect_callback) {
+					scope.connect_callback(scope);
+				}
 			}
 			// Shared memory update
 			if (message.share && message.share.from != scope.uuid) {
@@ -320,6 +328,36 @@ colony.prototype.setupClient = function(host, port){
 				scope.nobroadcast(); // turn off the broadcasting of the method for the next call (else it does an infinite broadcast loop)
 				scope.shared[message.share.label][message.share.type](message.share.data);
 				scope.info("scope.shared["+message.share.label+"] is now: ",scope.shared[message.share.label].value);
+			}
+			// A server is full. We need to check if we have space to receive the user
+			if (message.full) {
+				if (scope.ocount >= scope.max) {
+					scope.error("We are full. Can't accept any user.");
+					/*scope.broadcast({
+						entity:		scope.uuid,
+						available:	false,
+						uuid:		message.uuid	// replying with the user's UUIDv4, to track the request to its source
+					});*/
+				} else {
+					scope.info("We are *NOT* full. We can accept more users.");
+					scope.broadcast({
+						available:	true,
+						_for:		message._from,
+						entity:		scope.uuid,
+						host:		scope.host,
+						port:		scope.port+scope.portUpdater,	// portUpdater is used to calculate the public server's port number
+						uuid:		message.uuid	// replying with the user's UUIDv4, to track the request to its source
+					});
+				}
+			}
+			// A server volunteered to receive more players.
+			if (message.available && message.available === true && message._for == scope.uuid) {
+				scope.info("A SERVER VOLUNTEERED:",message.entity);
+				if (scope.sInstance) {
+					scope.sInstance.onReceive(message);
+				} else {
+					scope.error("You don't have any circular reference to the Fleet server (scope.sInstance)");
+				}
 			}
 		}
 	});
@@ -384,6 +422,9 @@ colony.prototype.getMinBut = function(data, prop, except){
 
 // share data with the colony
 colony.prototype.share = function(label, data){
+	if (this.shared[label]) {
+		return false;	// var already exist
+	}
 	if (data instanceof Array) {
 		this.shared[label] = new sharedArray(this, label, data);
 		this.shared[label].log(label,"data type Array",data);
@@ -416,6 +457,8 @@ colony.prototype.broadcast = function(data){
 		this.skipBroadcast = false;
 		return false;
 	}
+	// add source
+	data._from = this.uuid;
 	if (this.alpha) {
 		this.server.broadcast(data);
 	} else {
@@ -593,6 +636,26 @@ sharedNumber.prototype.replace = function(value) {
 	this.value = value*1;
 	return this.value;
 };
+sharedNumber.prototype.add = function(value) {
+	this.value += value;
+	this.send("add", value);
+	return this.value;
+};
+sharedNumber.prototype.substract = function(value) {
+	this.value -= value;
+	this.send("substract", value);
+	return this.value;
+};
+sharedNumber.prototype.multiply = function(value) {
+	this.value *= value;
+	this.send("multiply", value);
+	return this.value;
+};
+sharedNumber.prototype.divide = function(value) {
+	this.value /= value;
+	this.send("divide", value);
+	return this.value;
+};
 sharedNumber.prototype.log = function(){
 	var red, blue, reset;
 	red   = '\u001b[31m';
@@ -604,174 +667,6 @@ sharedNumber.prototype.log = function(){
 	}
 };
 
-
-
-
-
-
-function communication(instance,server, port, options){
-	var scope		= this;
-	this.colony 	= instance;
-	this.server		= server;
-	this.protocol	= new commProtocol(instance, this);
-	this.port		= port;
-	this.channels 	= {};
-	this.clients	= {};
-	this.count		= 0;
-	this.messageCallback	= function(){};
-	this.options	= _.extend({
-		server:			false,
-		onInit:			function(){},
-		onFail:			function(code, message){},
-		onReceive:		function(mesage){}
-	}, options);
-	
-	if (this.options.server) {
-		
-		this.wss 		= new wssServer({port: port});
-		this.wss.on('connection', function(ws) {
-			var scope2 = scope;
-			
-			// Increment the unique client count
-			scope.count++;
-			
-			// save it locally
-			var cid 			= scope.count*1;
-			
-			// register the client
-			scope.clients[cid]	= {ws:ws};
-			
-			scope.options.onInit(this);
-			
-			ws.on('message', function(message) {
-				
-				var parsed = scope.protocol.parse(message, ws);
-				console.log(">>> parsed",message,parsed);
-				if (!parsed) {
-					scope2.messageCallback(comm_decode(message));
-					scope2.options.onReceive(scope2, message);
-				}
-			});
-			
-			ws.on('close', function(code, message) {
-				delete scope2.clients[cid];
-			});
-		});
-	} else {
-		this.wss 		= new wssClient("ws://"+server+":"+port);
-		
-		this.wss.on('open', function() {
-			scope.options.onInit(scope);
-		});
-		this.wss.on('message', function(message) {
-			scope.messageCallback(comm_decode(message));
-			scope.options.onReceive(scope, message);
-		});
-		this.wss.on('error', function(message) {
-			scope.options.onFail(scope, message);
-		});
-	}
-}
-communication.prototype.send = function(message){
-	this.messageCallback = function(){};
-	if (!this.options.server) {
-		this.wss.send(comm_encode({
-			send:message
-		}));
-	} else {
-		console.log("communication.send() can only be used by clients, not servers", message);
-	}
-};
-communication.prototype.broadcast = function(message){
-	this.messageCallback = function(){};
-	if (this.options.server) {
-		for (j in this.clients) {
-			this.clients[j].ws.send(comm_encode({
-				send:message
-			}));
-		}
-	} else {
-		this.wss.send(comm_encode({
-			broadcast:message
-		}));
-	}
-};
-communication.prototype.ask = function(message, callback){
-	if (this.options.server) {
-		console.log("communication.ask() can only be used by clients, not servers", message);
-	} else {
-		this.messageCallback = callback;
-		// ask the server
-		this.wss.send(comm_encode({
-			ask:message
-		}));
-	}
-};
-
-
-
-
-
-
-function commProtocol(instance, commInstance) {
-	this.colony = instance;
-	this.comm	= commInstance;
-}
-commProtocol.prototype.parse = function(message, socket){
-	var i;
-	message = JSON.parse(message);
-	if (message.ask) {
-		switch (message.ask) {
-			case "identity?":
-				socket.send(comm_encode("Bourne, Jason."));
-				socket.send(comm_encode("Bond, James Bond.."));
-				// searching for a free spot
-				return true;
-				//this.colony.
-			break;
-			case "shared?":
-				var i;
-				var buffer = {};
-				for (i in this.colony.shared) {
-					buffer[i] = this.colony.shared[i].value;
-				}
-				socket.send(comm_encode(buffer));
-				return true;
-			break;
-			case "alpha?":
-				console.log("Asking if we are the alpha...");
-				if (this.colony.alpha) {
-					socket.send(comm_encode({
-						alpha:"yes"
-					}));
-				} else {
-					socket.send(comm_encode({
-						alpha:"no" //this.colony.shared["clients"][0]
-					}));
-				}
-				return true;
-			break;
-			default:
-				socket.send(comm_encode("I can't understand"));
-				return false;
-			break;
-		}
-	}
-	console.log("///////",message);
-	if (message.broadcast) {
-		console.log("Broadcast Request!",message.broadcast);
-		this.comm.broadcast(message.broadcast);
-	}
-};
-
-
-
-function comm_encode(data){
-	return JSON.stringify(data);
-}
-function comm_decode(data){
-	return JSON.parse(data);
-}
 
 
 

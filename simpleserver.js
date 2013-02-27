@@ -1,4 +1,5 @@
 var WebSocketServer 	= require('ws').Server;
+var uuid 				= require('./uuid');
 
 function simpleserver(port, options) {
 	var scope 				= this;
@@ -9,17 +10,25 @@ function simpleserver(port, options) {
 	this.count				= 0;	// Total number of connections, open or closed
 	this.ocount				= 0;	// Total number of identified users
 	
+	this.alias				= "SERVER";
+	if (options.alias) {
+		this.alias			= options.alias;
+	}
+	
 	this._version			= "1.0.0";
 	
 	this.options			= options;
+	
+	this.log("UUID", uuid.v4());
 	
 	this.log("version "+this._version);
 	this.log("running on port "+this.port);
 	this.wss.on('connection', function(ws) {
 		
-		scope.onConnect(ws);
+		var uid 	= scope.onConnect(ws);
 		
-		var uid 	= scope.count;
+		// uid is a UUID@v4
+		//var uid 	= uuid.v4(); //scope.count;
 		
 		ws.on('message', function(message) {
 			scope.onReceive(ws, uid, scope.wsdecode(message));
@@ -43,7 +52,7 @@ simpleserver.prototype.onConnect = function(ws) {
 	this.count++;
 	this.ocount++;
 	
-	var uid 	= this.count;	//  internal uid
+	var uid 	= uuid.v4(); //this.count;	//  internal uid
 	
 	this.users[uid]	= {
 		ws:		ws
@@ -55,6 +64,8 @@ simpleserver.prototype.onConnect = function(ws) {
 		ws:		ws,
 		uid:	uid
 	});
+	
+	return uid;
 }
 
 
@@ -140,7 +151,7 @@ simpleserver.prototype.log = function(data, data2) {
 	red   = '\u001b[31m';
 	blue  = '\u001b[34m';
 	reset = '\u001b[0m';
-	console.log(red+"<SERVER>");
+	console.log(red+"<"+this.alias+">");
 	for (i in arguments) {
 		console.log(reset, arguments[i],reset);
 	}
@@ -149,7 +160,12 @@ simpleserver.prototype.wsencode = function(data) {
 	return JSON.stringify(data);
 }
 simpleserver.prototype.wsdecode = function(data) {
-	return JSON.parse(data);
+	try {
+		return JSON.parse(data);
+	} catch (e) {
+		this.log("Non encoded data: ",data);
+		return data;
+	}
 }
 
 exports.simpleserver = simpleserver;
