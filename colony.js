@@ -548,6 +548,19 @@ sharedObject.prototype.set = function(opt) {
 	this.send("set", opt);
 	return this.value;
 };
+sharedObject.prototype.push = function(data) {
+	var i;
+	for (i in data) {
+		this.value[i] = data[i];
+	}
+	this.send("push", data);
+	return this.value;
+};
+sharedObject.prototype.remove = function(index) {
+	delete this.value[index];
+	this.send("remove", index);
+	return this.value;
+};
 sharedObject.prototype.replace = function(value) {
 	this.value = _.extend({},value);
 	return this.value;

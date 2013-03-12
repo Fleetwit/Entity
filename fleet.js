@@ -8,6 +8,7 @@ function fleet() {
 	this.host	= "";		// Hostname
 	this.max	= 2000;		// Max number of users per server. if more users connect, they will be sent to another serer instance.
 	this.serverChangeRequests = {};	// used to track server change requests (when a server is full)
+	this.users	= {};
 }
 // Receiving daa from the Colony
 fleet.prototype.onReceive = function(data) {
@@ -25,6 +26,7 @@ fleet.prototype.onReceive = function(data) {
 };
 fleet.prototype.init = function() {
 	var scope = this;
+	var i;
 	if (!this.colony) {
 		this.log("You are not part of a colony yet");
 		return false;
@@ -40,6 +42,13 @@ fleet.prototype.init = function() {
 	if (this.onlineCount === false) {
 		this.onlineCount	= this.colony.shared["online"];
 		this.log("We already have this var in memory: ",this.onlineCount.value);
+	}
+	
+	// Share the user list
+	this.users	= this.colony.share("users", {});
+	if (this.users === false) {
+		this.users			= this.colony.shared["users"];
+		this.log("We already have this var in memory: ",this.users.value);
 	}
 	
 	this.server = new simpleserver(this.port, {
@@ -82,14 +91,57 @@ fleet.prototype.init = function() {
 						if (data.auth.authtoken) {
 							// Save the authtoken
 							client.authtoken	= data.auth.authtoken;
-							// Send to the client his UID (UUIDv4)
-							scope.server.send(client.uid, {
-								uid:		client.uid
+							// Check Auth Token validity in the database
+							scope.sql.query("select * from authtokens where token='"+client.authtoken+"' and validity > "+(new Date().getTime()/1000), function(err, rows, fields) {
+								if (err) throw err;
+								if (rows.length > 0 && rows[0].id > 0) {
+									scope.info("Auth Token validated: ","UID: \t\t"+rows[0].uid,"Token: \t"+rows[0].token,"Validity: \t"+new Date(rows[0].validity*1000).toISOString());
+									scope.info(new Date(),new Date(scope.raceData.start_time*1000));
+									// register the user
+									var tmpObject = {};
+									tmpObject[client.uid] = {
+										token:		client.uid,
+										uid:		rows[0].uid,
+										authtoken:	rows[0].token,
+										validity:	rows[0].validity
+									};
+									scope.users.push(tmpObject);
+									
+									// register the user on the race
+									// Is the user already in the database, meaning he already played?
+									scope.sql.query("select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"'", function(err, rows, fields) {
+										if (rows.length == 0) {
+											// register the user's participation
+											scope.sql.query("insert into races_scores (rid,uid,start_time) values ('"+scope.raceData.id+"','"+scope.users.value[client.uid].uid+"','"+Math.round(new Date().getTime()/1000)+"')", function(err, rows, fields) {
+												// Send to the client his UID (UUIDv4)
+												scope.server.send(client.uid, {
+													uid:		client.uid,
+													start:		scope.raceData.start_time,
+													seconds:	Math.floor((new Date(scope.raceData.start_time*1000)-new Date())/1000),
+													mseconds:	(new Date(scope.raceData.start_time*1000)-new Date())
+												});
+												// Broadcast the updated number of online users
+												scope.server.broadcast({
+													online:		scope.onlineCount.value
+												}, [client.uid]);
+											});
+										} else {
+											scope.server.send(client.uid, {
+												played:		true
+											});
+											scope.server.close(client.uid);
+										}
+									});
+									
+									
+								} else {
+									// Send the 'invalid_token' error to the user
+									scope.server.send(client.uid, {
+										invalid_token:		client.authtoken
+									});
+								}
 							});
-							// Broadcast the updated number of online users
-							scope.server.broadcast({
-								online:		scope.onlineCount.value
-							}, [client.uid]);
+							
 						}
 					}
 					if (data.available && data.available === true) {
@@ -98,11 +150,25 @@ fleet.prototype.init = function() {
 							
 						}
 					}
+					if (data.scoredump) {
+						var totalscore = 0;
+						for (i in data.scoredump) {
+							totalscore += data.scoredump[i].score;
+						}
+						scope.info("SCORE SENT: ", totalscore);
+						// Register the score
+						scope.sql.query("update races_scores set score="+totalscore+", log='"+JSON.stringify(data.scoredump)+"', end_time='"+Math.round(new Date().getTime()/1000)+"' where uid="+scope.users.value[client.uid].uid, function(err, rows, fields) {
+							
+						});
+					}
 				break;
 			}
 		},
 		onQuit:	function(client) {
 			scope.log("Client Quit:", client.uid);
+			// remove the user from the list
+			scope.users.remove(client.uid);
+			
 			scope.onlineCount.substract(1);
 			scope.server.broadcast({
 				online:		scope.onlineCount.value
@@ -122,6 +188,17 @@ fleet.prototype.log = function(){
 	console.log(green+"<FLEET>");
 	for (i in arguments) {
 		console.log(reset, arguments[i],reset);
+	}
+};
+fleet.prototype.info = function(){
+	var red, blue, reset;
+	red   	= '\u001b[31m';
+	blue  	= '\u001b[34m';
+	green  	= '\u001b[32m';
+	reset 	= '\u001b[0m';
+	console.log(green+"<FLEET>");
+	for (i in arguments) {
+		console.log(blue, arguments[i],reset);
 	}
 };
 

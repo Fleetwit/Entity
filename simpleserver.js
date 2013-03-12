@@ -114,6 +114,16 @@ simpleserver.prototype.send = function(uid, data) {
 
 
 
+/****************
+	WS:CLOSE
+****************/
+simpleserver.prototype.close = function(uid) {
+	this.log("Closing connection to client #"+uid);
+	this.users[uid].ws.close();
+}
+
+
+
 
 /****************
 	WS:BROADCAST

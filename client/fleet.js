@@ -13,6 +13,7 @@ fleet.ws = function (url, options) {
 		},
         onClose: function(e){
 			console.log("onClose",e);
+			console.info("Connection to the server lost.");
 		},
         onReceive: function(data){
 			console.log("onReceive",data);
@@ -94,9 +95,11 @@ fleet.protocol.prototype.reset = function() {
 	this.suid		= false;
 	this.ocount		= 0;	// Number of users online
 };
-fleet.protocol.prototype.connect = function() {
+fleet.protocol.prototype.connect = function(onConnect) {
 	
 	var scope = this;
+	
+	scope.onConnect = onConnect;
 	
 	this.ws = new fleet.ws(this.url, {
 		onFail: function() {
@@ -137,15 +140,25 @@ fleet.protocol.prototype.processData = function(data) {
 		break;
 		// Complex/JSON data
 		default:
+			// Invalid token
+			if (data.invalid_token) {
+				console.info("Your access token is invalid!");
+				alert("Your Access Token has timed out. \nThe page will now reload.");
+				document.location = document.location;
+			}
 			// Update on the number of online players
 			if (data.online) {
 				this.ocount = data.online;
 				console.log("Online:",this.ocount+" users");
+				$('[data-dom="players_count"]').html(this.ocount);
+				console.log("data-dom",$('[data-dom="players_count"]'));
 			}
 			// Receiving our UID (UUIDv4)
 			if (data.uid) {
 				this.suid = data.uid;
 				console.log("Our UUIDv4:",this.suid);
+				// Starting the game
+				scope.onConnect();
 			}
 			// Server Change (default server was full)
 			if (data.serverchange) {
@@ -158,5 +171,29 @@ fleet.protocol.prototype.processData = function(data) {
 			}
 		break;
 	}
-	
 }
+
+fleet.protocol.prototype.start = function() {
+	
+	var scope = this;
+	
+	this.gameloader 		= new fleet.gameloader();
+	this.gameloader.games 	= this.games;
+	this.gameloader.init();
+}
+
+
+
+
+
+
+/*
+	FLEET GAME LOADER
+*/
+fleet.gameloader = function(url) {
+	this.url 		= url;
+	this.reset();
+}
+fleet.gameloader.prototype.init = function() {
+	console.log("Our games: ",this.games);
+};
