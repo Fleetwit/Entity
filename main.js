@@ -43,7 +43,7 @@ function server_init() {
 			
 			var server 			= new Fleet();
 			colony.sInstance 	= server;
-			server.max			= 2;	// max user per instance
+			server.max			= 500;	// max user per instance
 			server.port			= instance.port+portUpdater;
 			server.host			= instance.host;
 			server.sql			= sqlInstance;
