@@ -128,6 +128,7 @@ fleet.prototype.init = function() {
 										} else {
 											// Check if the user is just reconnecting from a lost connection
 											scope.sql.query("select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"' and score=0", function(err, rows, fields) {
+												scope.log("######################################################","select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"' and score=0",rows);
 												if (rows.length == 0) {
 													// User was registered and already has a score for this race
 													scope.server.send(client.uid, {
