@@ -126,10 +126,30 @@ fleet.prototype.init = function() {
 												}, [client.uid]);
 											});
 										} else {
-											scope.server.send(client.uid, {
-												played:		true
+											// Check if the user is just reconnecting from a lost connection
+											scope.sql.query("select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"' and score=0", function(err, rows, fields) {
+												if (rows.length == 0) {
+													// User was registered and already has a score for this race
+													scope.server.send(client.uid, {
+														played:		true
+													});
+													scope.server.close(client.uid);
+												} else {
+													// user is reconnecting, we need to let him play
+													scope.server.send(client.uid, {
+														welcomeback:true,
+														uid:		client.uid,
+														start:		scope.raceData.start_time,
+														seconds:	Math.floor((new Date(scope.raceData.start_time*1000)-new Date())/1000),
+														mseconds:	(new Date(scope.raceData.start_time*1000)-new Date())
+													});
+													// Broadcast the updated number of online users
+													scope.server.broadcast({
+														online:		scope.onlineCount.value
+													}, [client.uid]);
+												}
 											});
-											scope.server.close(client.uid);
+											
 										}
 									});
 									
