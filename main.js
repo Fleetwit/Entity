@@ -2,6 +2,7 @@ var colonyClass 		= require('./colony').colony;
 var Fleet 				= require('./fleet').fleet;
 var mysql				= require('mysql');
 
+console.log("Starting server for race #"+process.argv[2]);
 console.log('Connecting to Database...');
 var sqlInstance = mysql.createConnection({
 	host     : 'localhost',
@@ -17,7 +18,7 @@ sqlInstance.connect(function(err) {
 
 
 function server_init() {
-	var raceid 		= 2;
+	var raceid 		= process.argv[2];
 	var portUpdater = -30;
 	
 	var raceData;
@@ -29,6 +30,9 @@ function server_init() {
 		if (err) throw err;
 		raceData = rows[0];
 		console.log('Race: ', raceData.title);
+		console.log('Start (timestamp): ', raceData.start_time);
+		console.log('Start (String): ', new Date(raceData.start_time*1000));
+		console.log('Max Players: ', raceData.maxplayers);
 		
 		/*
 			Start the colony
