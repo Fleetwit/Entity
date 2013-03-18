@@ -29,6 +29,7 @@ function server_init() {
 	sqlInstance.query('select * from races where id='+raceid, function(err, rows, fields) {
 		if (err) throw err;
 		raceData = rows[0];
+		console.log('Time: ',  new Date());
 		console.log('Race: ', raceData.title);
 		console.log('Start (timestamp): ', raceData.start_time);
 		console.log('Start (String): ', new Date(raceData.start_time*1000));
