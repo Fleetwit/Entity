@@ -101,6 +101,11 @@ fleet.prototype.init = function() {
 				default:
 					if (data.auth) {
 						// If the user provides an authtoken
+						if (data.auth.demo) {
+							scope.demomode	= true;
+						} else {
+							scope.demomode	= false;
+						}
 						if (data.auth.authtoken) {
 							// Save the authtoken
 							client.authtoken	= data.auth.authtoken;
@@ -224,9 +229,14 @@ fleet.prototype.init = function() {
 						
 						scope.info("SCORE SENT: ", totalscore);
 						// Register the score
-						scope.sql.query("update races_scores set score="+totalscore+", log='"+JSON.stringify(data.scoredump)+"', end_time='"+Math.round(new Date().getTime()/1000)+"' where uid="+scope.users.value[client.uid].uid, function(err, rows, fields) {
-							
-						});
+						if (!scope.demomode) {
+							scope.sql.query("update races_scores set score="+totalscore+", log='"+JSON.stringify(data.scoredump)+"', end_time='"+Math.round(new Date().getTime()/1000)+"' where uid="+scope.users.value[client.uid].uid, function(err, rows, fields) {
+								
+							});
+						} else {
+							scope.info("User in demo mode. Score won't be saved.");
+						}
+						
 					}
 				break;
 			}
