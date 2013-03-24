@@ -216,16 +216,21 @@ fleet.prototype.init = function() {
 						
 						var totalscore = 0;
 						for (i in data.scoredump) {
-							totalscore += data.scoredump[i].score;
+							if (!isNaN(data.scoredump[i].score)) {
+								totalscore += data.scoredump[i].score;
+							}
 						}
 						// unregister from this level
-						scope.perlevel[data.quitlevel].substract(1);
+						if (scope.perlevel[data.quitlevel] && scope.perlevel[data.quitlevel].substract) {
+							scope.perlevel[data.quitlevel].substract(1);
 						
-						perlevel_update[data.quitlevel] = scope.perlevel[data.quitlevel].value;
+							perlevel_update[data.quitlevel] = scope.perlevel[data.quitlevel].value;
+							
+							scope.server.broadcast({
+								perlevel:	perlevel_update
+							});
+						}
 						
-						scope.server.broadcast({
-							perlevel:	perlevel_update
-						});
 						
 						scope.info("SCORE SENT: ", totalscore);
 						// Register the score
