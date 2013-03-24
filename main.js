@@ -1,6 +1,7 @@
 var colonyClass 		= require('./colony').colony;
 var Fleet 				= require('./fleet').fleet;
 var mysql				= require('mysql');
+var chatserver 			= require('./chatserver').chatserver;
 
 console.log("Starting server for race #"+process.argv[2]);
 console.log('Connecting to Database...');
@@ -22,6 +23,7 @@ function server_init() {
 	var portUpdater = -30;
 	
 	var raceData;
+	var games;
 	
 	/*
 		Get race infos
@@ -35,27 +37,42 @@ function server_init() {
 		console.log('Start (String): ', new Date(raceData.start_time*1000));
 		console.log('Max Players: ', raceData.maxplayers);
 		
-		/*
-			Start the colony
-		*/
-		var colony 				= new colonyClass();
-		colony.range 			= [8080,8084];
-		colony.portUpdater		= portUpdater;
-		colony.connect(function(instance) {
-			/*
-				Start the server
-			*/
+		sqlInstance.query('select g.name, g.classname,g.id, a.settings from games as g, races_games_assoc as a where g.id=a.gid and a.rid='+raceData.id, function(err, rows, fields) {
+			if (err) throw err;
+			games = rows;
 			
-			var server 			= new Fleet();
-			colony.sInstance 	= server;
-			server.max			= 500;	// max user per instance
-			server.port			= instance.port+portUpdater;
-			server.host			= instance.host;
-			server.sql			= sqlInstance;
-			server.colony 		= colony;
-			server.raceData		= raceData;
-			server.init();
+			console.log("games",games);
+			
+			/*
+				Start the chat
+			*/
+			var chat = new chatserver(sqlInstance);
+			chat.init();
+			
+			/*
+				Start the colony
+			*/
+			var colony 				= new colonyClass();
+			colony.range 			= [8080,8084];
+			colony.portUpdater		= portUpdater;
+			colony.connect(function(instance) {
+				/*
+					Start the server
+				*/
+				
+				var server 			= new Fleet();
+				colony.sInstance 	= server;
+				server.max			= 500;	// max user per instance
+				server.port			= instance.port+portUpdater;
+				server.host			= instance.host;
+				server.sql			= sqlInstance;
+				server.colony 		= colony;
+				server.raceData		= raceData;
+				server.games		= games;
+				server.init();
+			});
 		});
+		
 	});
 	
 }

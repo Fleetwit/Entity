@@ -18,11 +18,11 @@ function simpleclient(host, port, options) {
 			scope.options.onConnect(scope);
 		});
 		this.wss.on('message', function(message) {
-			scope.log("RECEIVING", scope.wsdecode(message));
+			//scope.log("RECEIVING", scope.wsdecode(message));
 			scope.options.onReceive(scope, scope.wsdecode(message));
 		});
 		this.wss.on('close', function(code) {
-			scope.log("CLOSED", code);
+			//scope.log("CLOSED", code);
 			scope.options.onClose(scope, code);
 		});
 		this.wss.on('error', function(message) {

@@ -548,6 +548,11 @@ sharedObject.prototype.set = function(opt) {
 	this.send("set", opt);
 	return this.value;
 };
+sharedObject.prototype.setsub = function(opt) {
+	this.value[opt.label][opt.prop] = opt.value;
+	this.send("setsub", opt);
+	return this.value;
+};
 sharedObject.prototype.push = function(data) {
 	var i;
 	for (i in data) {

@@ -3,14 +3,15 @@ var simpleclient 		= require('./simpleclient').simpleclient;
 
 
 function fleet() {
-	this.colony = false;	// no colony yet
-	this.port	= 0;		// port
-	this.host	= "";		// Hostname
-	this.max	= 2000;		// Max number of users per server. if more users connect, they will be sent to another serer instance.
+	this.colony 	= false;	// no colony yet
+	this.port		= 0;		// port
+	this.host		= "";		// Hostname
+	this.max		= 2000;		// Max number of users per server. if more users connect, they will be sent to another serer instance.
 	this.serverChangeRequests = {};	// used to track server change requests (when a server is full)
-	this.users	= {};
+	this.users		= {};
+	this.perlevel	= {};
 }
-// Receiving daa from the Colony
+// Receiving data from the Colony
 fleet.prototype.onReceive = function(data) {
 	if (data.available && data.available === true && !this.serverChangeRequests[data.uuid]) {
 		this.log("Found a server:", data);
@@ -42,6 +43,15 @@ fleet.prototype.init = function() {
 	if (this.onlineCount === false) {
 		this.onlineCount	= this.colony.shared["online"];
 		this.log("We already have this var in memory: ",this.onlineCount.value);
+	}
+	
+	// Share the number of users on each level
+	for (i=0;i<this.games.length;i++) {
+		this.perlevel[i]		= this.colony.share("level_"+i, 0);
+		if (this.perlevel[i] === false) {
+			this.perlevel[i]	= this.colony.shared["level_"+i];
+			this.log("We already have this var in memory: ",this.perlevel[i].value);
+		}
 	}
 	
 	// Share the user list
@@ -83,8 +93,11 @@ fleet.prototype.init = function() {
 			]);
 		},
 		onReceive:	function(client, data) {
-			scope.log("Message from #"+client.uid+":", data);
+			//scope.log("Message from #"+client.uid+":", data);
 			switch (data) {
+				case "ping":
+					scope.server.send(client.uid, "pong");
+				break;
 				default:
 					if (data.auth) {
 						// If the user provides an authtoken
@@ -103,7 +116,8 @@ fleet.prototype.init = function() {
 										token:		client.uid,
 										uid:		rows[0].uid,
 										authtoken:	rows[0].token,
-										validity:	rows[0].validity
+										validity:	rows[0].validity,
+										level:		0
 									};
 									scope.users.push(tmpObject);
 									
@@ -171,11 +185,43 @@ fleet.prototype.init = function() {
 							
 						}
 					}
+					if (data.setlevel != undefined) {
+						var perlevel_update = {};	// buffer for the broadcast
+						
+						// Update the user count on each level
+						if (data.setlevel > 0) {
+							scope.perlevel[data.setlevel-1].substract(1);
+							perlevel_update[data.setlevel-1] = scope.perlevel[data.setlevel-1].value;
+						}
+						scope.perlevel[data.setlevel].add(1);
+						perlevel_update[data.setlevel] = scope.perlevel[data.setlevel].value;
+						scope.users.setsub({
+							label:	client.uid,
+							prop:	"level",
+							value:	data.setlevel
+						});
+						
+						// Braodcast the new user count
+						scope.server.broadcast({
+							perlevel:	perlevel_update
+						});
+					}
 					if (data.scoredump) {
+						var perlevel_update = {};	// buffer for the broadcast
+						
 						var totalscore = 0;
 						for (i in data.scoredump) {
 							totalscore += data.scoredump[i].score;
 						}
+						// unregister from this level
+						scope.perlevel[data.quitlevel].substract(1);
+						
+						perlevel_update[data.quitlevel] = scope.perlevel[data.quitlevel].value;
+						
+						scope.server.broadcast({
+							perlevel:	perlevel_update
+						});
+						
 						scope.info("SCORE SENT: ", totalscore);
 						// Register the score
 						scope.sql.query("update races_scores set score="+totalscore+", log='"+JSON.stringify(data.scoredump)+"', end_time='"+Math.round(new Date().getTime()/1000)+"' where uid="+scope.users.value[client.uid].uid, function(err, rows, fields) {
@@ -188,6 +234,8 @@ fleet.prototype.init = function() {
 		onQuit:	function(client) {
 			scope.log("Client Quit:", client.uid);
 			// remove the user from the list
+			scope.perlevel[scope.users.value[client.uid].level].substract(1);
+			
 			scope.users.remove(client.uid);
 			
 			scope.onlineCount.substract(1);

@@ -5,8 +5,7 @@
 	"dependencies": {
 		"ws": 			"latest",
 		"mysql":		"latest",
-		"underscore":	"latest",
-		"winston":		"latest"
+		"underscore":	"latest"
 	}
 }
 
