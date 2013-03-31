@@ -21,8 +21,15 @@ chatserver.prototype.init = function() {
 			]);
 		},
 		onReceive:	function(client, data) {
-			scope.log("Message from #"+client.uid+":", data);
+			if (data != "ping" && data != "\"ping\"") {
+				scope.log("Message from #"+client.uid+":", data);
+			}
+			
 			switch (data) {
+				case "ping":
+				case "\"ping\"":
+					scope.server.send(client.uid, "pong");
+				break;
 				default:
 					if (data.auth) {
 						// If the user provides an authtoken

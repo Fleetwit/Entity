@@ -126,53 +126,63 @@ fleet.prototype.init = function() {
 									};
 									scope.users.push(tmpObject);
 									
-									// register the user on the race
-									// Is the user already in the database, meaning he already played?
-									scope.sql.query("select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"'", function(err, rows, fields) {
-										if (rows.length == 0) {
-											// register the user's participation
-											scope.sql.query("insert into races_scores (rid,uid,start_time) values ('"+scope.raceData.id+"','"+scope.users.value[client.uid].uid+"','"+Math.round(new Date().getTime()/1000)+"')", function(err, rows, fields) {
-												// Send to the client his UID (UUIDv4)
-												scope.server.send(client.uid, {
-													uid:		client.uid,
-													start:		scope.raceData.start_time,
-													seconds:	Math.floor((new Date(scope.raceData.start_time*1000)-new Date())/1000),
-													mseconds:	(new Date(scope.raceData.start_time*1000)-new Date())
-												});
-												// Broadcast the updated number of online users
-												scope.server.broadcast({
-													online:		scope.onlineCount.value
-												}, [client.uid]);
-											});
-										} else {
-											// Check if the user is just reconnecting from a lost connection
-											scope.sql.query("select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"' and score=0", function(err, rows, fields) {
-												scope.log("######################################################","select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"' and score=0",rows);
-												if (rows.length == 0 && !data.auth.demo) {
-													// User was registered and already has a score for this race
-													scope.server.send(client.uid, {
-														played:		true
+									// Check if the user is registered to the race
+									scope.sql.query("select * from races_registrations where uid='"+rows[0].uid+"' and rid="+scope.raceData.id, function(err, rows, fields) {
+										if (err) throw err;
+										if (rows.length > 0 && rows[0].id > 0) {
+											// register the user on the race
+											// Is the user already in the database, meaning he already played?
+											scope.sql.query("select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"'", function(err, rows, fields) {
+												if (rows.length == 0) {
+													// register the user's participation
+													scope.sql.query("insert into races_scores (rid,uid,start_time) values ('"+scope.raceData.id+"','"+scope.users.value[client.uid].uid+"','"+Math.round(new Date().getTime()/1000)+"')", function(err, rows, fields) {
+														// Send to the client his UID (UUIDv4)
+														scope.server.send(client.uid, {
+															uid:		client.uid,
+															start:		scope.raceData.start_time,
+															seconds:	Math.floor((new Date(scope.raceData.start_time*1000)-new Date())/1000),
+															mseconds:	(new Date(scope.raceData.start_time*1000)-new Date())
+														});
+														// Broadcast the updated number of online users
+														scope.server.broadcast({
+															online:		scope.onlineCount.value
+														}, [client.uid]);
 													});
-													scope.server.close(client.uid);
 												} else {
-													// user is reconnecting, we need to let him play
-													scope.server.send(client.uid, {
-														welcomeback:true,
-														uid:		client.uid,
-														start:		scope.raceData.start_time,
-														seconds:	Math.floor((new Date(scope.raceData.start_time*1000)-new Date())/1000),
-														mseconds:	(new Date(scope.raceData.start_time*1000)-new Date())
+													// Check if the user is just reconnecting from a lost connection
+													scope.sql.query("select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"' and score=0", function(err, rows, fields) {
+														scope.log("######################################################","select * from races_scores where rid='"+scope.raceData.id+"' and uid='"+scope.users.value[client.uid].uid+"' and score=0",rows);
+														if (rows.length == 0 && !data.auth.demo) {
+															// User was registered and already has a score for this race
+															scope.server.send(client.uid, {
+																played:		true
+															});
+															scope.server.close(client.uid);
+														} else {
+															// user is reconnecting, we need to let him play
+															scope.server.send(client.uid, {
+																welcomeback:true,
+																uid:		client.uid,
+																start:		scope.raceData.start_time,
+																seconds:	Math.floor((new Date(scope.raceData.start_time*1000)-new Date())/1000),
+																mseconds:	(new Date(scope.raceData.start_time*1000)-new Date())
+															});
+															// Broadcast the updated number of online users
+															scope.server.broadcast({
+																online:		scope.onlineCount.value
+															}, [client.uid]);
+														}
 													});
-													// Broadcast the updated number of online users
-													scope.server.broadcast({
-														online:		scope.onlineCount.value
-													}, [client.uid]);
+													
 												}
 											});
-											
+										} else {
+											scope.server.send(client.uid, {
+												notregistered:		true
+											});
+											scope.server.close(client.uid);
 										}
 									});
-									
 									
 								} else {
 									// Send the 'invalid_token' error to the user
@@ -249,7 +259,12 @@ fleet.prototype.init = function() {
 		onQuit:	function(client) {
 			scope.log("Client Quit:", client.uid);
 			// remove the user from the list
-			scope.perlevel[scope.users.value[client.uid].level].substract(1);
+			scope.log("**********************************************************************");
+			scope.log("**********************************************************************");
+			
+			if (scope.users.value[client.uid].level && scope.perlevel[scope.users.value[client.uid].level]) {
+				scope.perlevel[scope.users.value[client.uid].level].substract(1);
+			}
 			
 			scope.users.remove(client.uid);
 			
