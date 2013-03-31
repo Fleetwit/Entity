@@ -2,6 +2,9 @@ var colonyClass 		= require('./colony').colony;
 var Fleet 				= require('./fleet').fleet;
 var mysql				= require('mysql');
 var chatserver 			= require('./chatserver').chatserver;
+var http 				= require('http');
+var qs 					= require('querystring');
+
 
 console.log("Starting server for race #"+process.argv[2]);
 console.log('Connecting to Database...');
@@ -70,6 +73,32 @@ function server_init() {
 				server.raceData		= raceData;
 				server.games		= games;
 				server.init();
+				
+				// Create admin interface
+				http.createServer(function (req, httpserver) {
+					console.log("****************************************************************");
+					
+					httpserver.writeHead(200, {"Content-Type": "application/json"});
+					var querystring = req.url.split("?");
+					var arg;
+					if (querystring.length > 1) {
+						arg = qs.parse(querystring[1]);
+					} else {
+						arg = qs.parse(req.url);
+					}
+					if (arg.reboot) {
+						server.server.broadcast({
+							system: {
+								reboot:	true
+							}
+						},[]);
+						httpserver.write(JSON.stringify({rebooted: true}));
+					} else {
+						httpserver.write("Query unrecognized.");
+					}
+					httpserver.end();
+					
+				}).listen(8600);
 			});
 		});
 		

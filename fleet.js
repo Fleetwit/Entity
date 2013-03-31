@@ -245,7 +245,7 @@ fleet.prototype.init = function() {
 						scope.info("SCORE SENT: ", totalscore);
 						// Register the score
 						if (!scope.demomode) {
-							scope.sql.query("update races_scores set score="+totalscore+", log='"+JSON.stringify(data.scoredump)+"', end_time='"+Math.round(new Date().getTime()/1000)+"' where uid="+scope.users.value[client.uid].uid, function(err, rows, fields) {
+							scope.sql.query("update races_scores set score="+totalscore+", log='"+JSON.stringify(data.scoredump)+"', end_time='"+Math.round(new Date().getTime()/1000)+"' where uid="+scope.users.value[client.uid].uid+" and rid="+scope.race.id, function(err, rows, fields) {
 								
 							});
 						} else {
